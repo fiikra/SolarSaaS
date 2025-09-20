@@ -1,0 +1,67 @@
+SolarSaaS/
+├── app/                      # Cœur de l'application
+│   ├── Config/
+│   │   └── config.php        # Fichier de configuration (DB, URL, etc.)
+│   ├── Core/                 # Classes de base du framework
+│   │   ├── Controller.php    # Contrôleur de base
+│   │   ├── CSRF.php          # Gestion de la sécurité CSRF
+│   │   ├── Database.php      # Gestion de la connexion BDD (Singleton)
+│   │   ├── Model.php         # Modèle de base
+│   │   ├── Request.php       # Gestion des requêtes HTTP (POST, GET)
+│   │   └── Router.php        # Routage des URLs vers les contrôleurs
+│   ├── Controllers/          # Contrôleurs (logique métier)
+│   │   ├── AccountController.php
+│   │   ├── ApplianceController.php
+│   │   ├── AuthController.php
+│   │   ├── ComponentController.php
+│   │   ├── DashboardController.php
+│   │   ├── DimensioningController.php
+│   │   ├── HomeController.php
+│   │   ├── MaintenanceController.php
+│   │   ├── ProjectController.php
+│   │   └── SettingController.php
+│   ├── Models/               # Modèles (interaction avec la BDD)
+│   │   ├── Appliance.php
+│   │   ├── Client.php
+│   │   ├── Component.php
+│   │   ├── Project.php
+│   │   ├── Region.php
+│   │   ├── Setting.php
+│   │   ├── Subscription.php
+│   │   └── User.php
+│   └── Views/                # Fichiers de présentation (HTML/PHP)
+│       ├── account/
+│       │   └── index.php
+│       ├── auth/
+│       │   ├── login.php
+│       │   └── register.php
+│       ├── components/
+│       │   ├── form.php
+│       │   └── index.php
+│       ├── dashboard/
+│       │   └── index.php
+│       ├── dimensioning/
+│       │   └── result.php
+│       ├── errors/
+│       │   ├── 403.php
+│       │   └── 404.php
+│       ├── home/
+│       │   └── index.php
+│       ├── layouts/
+│       │   └── default.php
+│       ├── projects/
+│       │   ├── create.php
+│       │   ├── estimate.php
+│       │   ├── index.php
+│       │   ├── maintenance.php
+│       │   └── show.php
+│       └── settings/
+│           └── edit.php
+├── public/                   # Racine web (accessible par le navigateur)
+│   ├── .htaccess             # Redirection des requêtes vers index.php
+│   └── index.php             # Point d'entrée unique de l'application
+├── vendor/                   # Dépendances gérées par Composer
+│   └── ...                   # (Contenu généré automatiquement)
+├── composer.json             # Fichier de configuration de Composer
+├── database.sql              # Schéma complet de la base de données
+└── README.md                 # Documentation du projet

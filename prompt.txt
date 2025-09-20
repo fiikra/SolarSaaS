@@ -1,0 +1,222 @@
+Prompt de Développement Avancé : Reconstruction de l'Application "SolarSaaS"
+1. Rôle et Objectif
+Votre Rôle : Agissez en tant qu'architecte logiciel et développeur full-stack expert. Votre mission est de reconstruire de A à Z une application SaaS (Software as a Service) en vous basant sur ce cahier des charges. Vous devez non seulement implémenter les fonctionnalités décrites, mais aussi refactoriser et optimiser le code pour garantir une performance, une sécurité et une maintenabilité de premier ordre.
+
+Objectif Principal : Créer une application web métier SaaS multi-clients nommée "SolarSaaS". L'application est destinée aux professionnels de l'énergie solaire et doit être une solution complète pour le dimensionnement d'installations photovoltaïques. Le modèle économique repose sur des abonnements qui déterminent le nombre d'utilisateurs par compte client.
+
+L'accent doit être mis sur une base de code propre, une sécurité irréprochable (notamment l'isolation des données entre les clients), une architecture MVC robuste et une expérience utilisateur (UI/UX) moderne, fluide et intuitive.
+
+2. Exigences Architecturales et Techniques
+Backend : PHP 8+ en natif. N'utilisez aucun framework comme Laravel ou Symfony. Le code doit être purement orienté objet et suivre les standards PSR-4 pour l'autoloading.
+
+Frontend : Tailwind CSS pour l'intégralité du style. L'interface doit être entièrement responsive. Le JavaScript (vanilla JS) doit être utilisé uniquement pour des améliorations de l'expérience utilisateur qui ne peuvent être réalisées côté serveur (ex: calculs dynamiques sur la page de sélection du matériel).
+
+Architecture : Mettez en œuvre une architecture MVC (Modèle-Vue-Contrôleur) stricte.
+
+Point d'Entrée Unique : Toutes les requêtes HTTP doivent être dirigées vers public/index.php via la réécriture d'URL.
+
+Routage : Un routeur personnalisé doit gérer les requêtes GET et POST et prendre en charge les paramètres dynamiques dans l'URL (ex: /project/show/{id}).
+
+Dépendances : Utilisez Composer uniquement pour l'autoloading PSR-4 des classes du namespace App.
+
+Serveur Web : La configuration doit être prévue pour Apache avec mod_rewrite. Le fichier .htaccess fourni est la référence.
+
+Qualité du Code : Le code doit être clair, bien commenté (en anglais pour le code, en français pour l'UI si nécessaire) et facile à maintenir.
+
+3. Exigences de Sécurité Fondamentales
+Isolation Stricte des Données (Multi-client) : C'est l'exigence la plus critique du modèle SaaS. Absolument chaque requête SQL qui accède à des données métier (projets, matériel, utilisateurs, etc.) doit être filtrée par le client_id de l'utilisateur actuellement authentifié en session. Aucune donnée ne doit jamais être accessible par un autre client.
+
+Protection CSRF : Implémentez une protection contre les attaques CSRF sur tous les formulaires utilisant la méthode POST.
+
+Mots de Passe : Hachez systématiquement les mots de passe avec password_hash() (en utilisant PASSWORD_DEFAULT) et vérifiez-les avec password_verify().
+
+Gestion des Sessions : Utilisez session_regenerate_id(true) lors de chaque connexion réussie pour prévenir les attaques de fixation de session.
+
+Validation des Entrées : Validez et nettoyez toutes les données provenant de l'utilisateur avant de les traiter ou de les insérer en base de données.
+
+4. Schéma de la Base de Données (MySQL/MariaDB)
+Utilisez exactement le schéma SQL suivant. Il est la fondation du modèle multi-client et inclut les triggers pour les calculs automatiques.
+
+-- Contenu complet et commenté du fichier database.sql
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+DROP TABLE IF EXISTS `maintenance_tasks`, `project_components`, `settings`, `components`, `project_appliances`, `projects`, `regions`, `users`, `subscriptions`, `clients`;
+
+-- Chaque client (entreprise) est une entité séparée. C'est la table racine pour l'isolation des données.
+CREATE TABLE `clients` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `company_name` VARCHAR(255) NOT NULL,
+  `contact_email` VARCHAR(255) NOT NULL UNIQUE,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Gère le plan d'abonnement pour chaque client, notamment la limite d'utilisateurs.
+CREATE TABLE `subscriptions` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `client_id` INT NOT NULL,
+  `plan_name` VARCHAR(100) NOT NULL,
+  `max_users` INT NOT NULL DEFAULT 1,
+  `start_date` DATE NOT NULL,
+  `end_date` DATE NOT NULL,
+  `status` ENUM('active', 'expired', 'cancelled') NOT NULL DEFAULT 'active',
+  FOREIGN KEY (`client_id`) REFERENCES `clients`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Chaque utilisateur appartient à un client. Le rôle 'admin' peut gérer les autres utilisateurs du même client.
+CREATE TABLE `users` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `client_id` INT NOT NULL,
+  `name` VARCHAR(255) NOT NULL,
+  `email` VARCHAR(255) NOT NULL UNIQUE,
+  `password` VARCHAR(255) NOT NULL,
+  `role` ENUM('admin', 'user') NOT NULL DEFAULT 'user',
+  FOREIGN KEY (`client_id`) REFERENCES `clients`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Données géographiques pour les calculs de rayonnement.
+CREATE TABLE `regions` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(255) NOT NULL,
+  `psh` DECIMAL(5, 2) NOT NULL COMMENT 'Peak Sun Hours (kWh/m²/day)'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- Insérer les données des régions algériennes ici...
+
+-- Chaque projet appartient à un client et a été créé par un utilisateur.
+CREATE TABLE `projects` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `client_id` INT NOT NULL,
+  `region_id` INT NOT NULL,
+  `project_name` VARCHAR(255) NOT NULL,
+  `customer_name` VARCHAR(255) NOT NULL,
+  `total_daily_consumption` DECIMAL(10, 2) DEFAULT 0.00,
+  `total_price` DECIMAL(12, 2) DEFAULT 0.00,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`client_id`) REFERENCES `clients`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`region_id`) REFERENCES `regions`(`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `project_appliances` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `project_id` INT NOT NULL,
+  `name` VARCHAR(255) NOT NULL,
+  `power` DECIMAL(10, 2) NOT NULL,
+  `quantity` INT NOT NULL,
+  `daily_usage_hours` DECIMAL(4, 2) NOT NULL,
+  `daily_consumption` DECIMAL(10, 2) GENERATED ALWAYS AS (`power` * `quantity` * `daily_usage_hours`) STORED,
+  FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Le catalogue de matériel est propre à chaque client.
+CREATE TABLE `components` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `client_id` INT NOT NULL,
+  `type` ENUM('panel', 'battery', 'inverter', 'controller') NOT NULL,
+  `brand` VARCHAR(255) NOT NULL,
+  `model` VARCHAR(255) NOT NULL,
+  `specs` JSON NOT NULL,
+  `price` DECIMAL(10, 2) NOT NULL,
+  FOREIGN KEY (`client_id`) REFERENCES `clients`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `project_components` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `project_id` INT NOT NULL,
+  `component_id` INT NOT NULL,
+  `quantity` INT NOT NULL,
+  `unit_price` DECIMAL(10, 2) NOT NULL,
+  `total_price` DECIMAL(12, 2) GENERATED ALWAYS AS (`quantity` * `unit_price`) STORED,
+  FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`component_id`) REFERENCES `components`(`id`) ON DELETE CASCADE,
+  UNIQUE KEY `project_component` (`project_id`, `component_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Les paramètres de calcul sont aussi personnalisables par chaque client.
+CREATE TABLE `settings` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `client_id` INT NOT NULL UNIQUE,
+  `battery_dod` DECIMAL(5, 2) NOT NULL DEFAULT 0.50,
+  `system_loss_factor` DECIMAL(5, 2) NOT NULL DEFAULT 0.77,
+  `days_of_autonomy` INT NOT NULL DEFAULT 2,
+  FOREIGN KEY (`client_id`) REFERENCES `clients`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `maintenance_tasks` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `component_type` ENUM('panel', 'battery', 'inverter', 'general') NOT NULL,
+  `task_description` TEXT NOT NULL,
+  `frequency` ENUM('monthly', 'quarterly', 'biannual', 'annual') NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- Insérer les tâches de maintenance ici...
+
+-- Triggers pour les calculs automatiques
+DELIMITER $$
+CREATE TRIGGER `after_appliance_insert` AFTER INSERT ON `project_appliances` FOR EACH ROW BEGIN UPDATE projects SET total_daily_consumption = (SELECT SUM(daily_consumption) FROM project_appliances WHERE project_id = NEW.project_id) WHERE id = NEW.project_id; END$$
+CREATE TRIGGER `after_appliance_delete` AFTER DELETE ON `project_appliances` FOR EACH ROW BEGIN UPDATE projects SET total_daily_consumption = (SELECT IFNULL(SUM(daily_consumption), 0) FROM project_appliances WHERE project_id = OLD.project_id) WHERE id = OLD.project_id; END$$
+CREATE TRIGGER `after_project_component_insert` AFTER INSERT ON `project_components` FOR EACH ROW BEGIN UPDATE projects SET total_price = (SELECT SUM(total_price) FROM project_components WHERE project_id = NEW.project_id) WHERE id = NEW.project_id; END$$
+CREATE TRIGGER `after_project_component_delete` AFTER DELETE ON `project_components` FOR EACH ROW BEGIN UPDATE projects SET total_price = (SELECT IFNULL(SUM(total_price), 0) FROM project_components WHERE project_id = OLD.project_id) WHERE id = OLD.project_id; END$$
+CREATE TRIGGER `after_project_component_update` AFTER UPDATE ON `project_components` FOR EACH ROW BEGIN UPDATE projects SET total_price = (SELECT IFNULL(SUM(total_price), 0) FROM project_components WHERE project_id = NEW.project_id) WHERE id = NEW.project_id; END$$
+DELIMITER ;
+
+COMMIT;
+
+5. Structure des Fichiers
+Organisez le code source en suivant exactement cette arborescence de fichiers :
+
+/SolarSaaS
+|-- /app/... (structure complète identique à celle fournie précédemment)
+|-- /public
+|   |-- .htaccess
+|   `-- index.php
+`-- composer.json
+
+6. Description Détaillée des Fonctionnalités et UI/UX
+Générez le code pour chaque fichier en suivant la logique métier décrite ci-dessous.
+
+Processus d'Inscription (Point crucial du SaaS) :
+
+Un nouvel utilisateur remplit le formulaire d'inscription.
+
+Le système doit exécuter une transaction SQL unique pour créer :
+
+Une nouvelle entrée dans la table clients.
+
+Une nouvelle entrée dans la table users pour ce client, avec le rôle 'admin'.
+
+Une nouvelle entrée dans subscriptions avec un plan par défaut (ex: 1 an, 1 utilisateur max).
+
+Une nouvelle entrée dans settings avec les paramètres de calcul par défaut.
+
+Si une étape échoue, la transaction doit être annulée (rollback) pour garantir la cohérence des données.
+
+L'utilisateur est ensuite automatiquement connecté.
+
+Layout et Navigation :
+
+Créez un layout principal (layouts/default.php) avec une barre de navigation latérale fixe (partials/sidebar.php).
+
+Logique des Rôles : Les liens "Gestion du Compte" et "Paramètres" dans la sidebar ne doivent être visibles et accessibles que si $_SESSION['role'] === 'admin'. Mettez en place une méthode protectAdmin() dans le Controller de base pour sécuriser les routes correspondantes.
+
+Gestion du Compte (Admin uniquement) :
+
+L'admin du compte peut ajouter de nouveaux utilisateurs.
+
+Logique d'Abonnement : Avant d'ajouter un nouvel utilisateur, le système doit vérifier si le nombre actuel d'utilisateurs pour ce client_id est inférieur à la valeur max_users définie dans leur abonnement. Si la limite est atteinte, affichez un message clair et n'autorisez pas l'ajout.
+
+L'admin peut supprimer d'autres utilisateurs de son compte (mais pas lui-même).
+
+Flux de Travail de Dimensionnement :
+
+Le flux doit être logique et guider l'utilisateur étape par étape : Liste des projets -> Création -> Ajout des appareils -> Calcul du dimensionnement -> Sélection du matériel -> Devis final -> Plan de maintenance.
+
+Sur la page de résultats du dimensionnement (dimensioning/result.php), la section de sélection du matériel doit être interactive. Utilisez du JavaScript pour calculer et afficher la "Quantité Suggérée" de panneaux et de batteries en temps réel dès qu'un modèle est sélectionné, en se basant sur les besoins calculés et les spécifications du composant.
+
+Catalogue de Matériel :
+
+L'interface CRUD pour le matériel doit être intuitive. Le formulaire de création/modification doit adapter dynamiquement les champs de spécifications en fonction du type de matériel sélectionné (JavaScript).
+
+7. Instructions Finales
+Ce document constitue un cahier des charges complet et exhaustif. Votre mission est de le traduire en une application fonctionnelle, robuste et professionnelle sans nécessiter d'intervention ou de clarification supplémentaire. Appliquez les meilleures pratiques de développement à chaque étape pour produire un code de haute qualité.
